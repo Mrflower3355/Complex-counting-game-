@@ -24,7 +24,7 @@ Planned Features
 
 [ ] Release version 1.0
 
-[ ] Move on to new Python projects after version 1.0
+[ ] Move on to new Python projects after version 10.0
 
 
 Notes
