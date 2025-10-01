@@ -31,4 +31,4 @@ Notes
 
 Future updates will expand functionality and improve the overall experience.
 
-After version 1.0 is released, development on this game will stop.
+After version 10.0 is released, development on this game will stop.
