@@ -15,6 +15,7 @@ print(
     f"You have {max_attempts} attempts and 2 minutes to guess the number between 1 and 100.")
 
 start_time = time.time()
+
 # Function to check if a number is prime
 
 
@@ -25,9 +26,9 @@ def is_prime(n):
         if n % i == 0:
             return False
     return True
+
+
 # Function to get hot/cold feedback
-
-
 def get_hot_cold(guess, target):
     diff = abs(guess - target)
     if diff == 0:
@@ -42,9 +43,9 @@ def get_hot_cold(guess, target):
         return "Warm."
     else:
         return "Cold."
+
+
 # Load and save high score
-
-
 def load_high_score():
     if os.path.exists("highscore.txt"):
         with open("highscore.txt", "r") as f:
@@ -54,15 +55,14 @@ def load_high_score():
                 return None
     return None
 
+
 # Save high score
-
-
 def save_high_score(score):
     with open("highscore.txt", "w") as f:
         f.write(str(score))
-# Main game loop
 
 
+# Main game function
 def main():
     print("Welcome to the Complex Number Guessing Game!")
     print("Select difficulty: 1) Easy 2) Medium 3) Hard")
