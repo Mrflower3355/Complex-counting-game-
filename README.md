@@ -1,34 +1,73 @@
-Complex Counting Game
+# Complex Number Guessing Game
 
-A beginner-friendly Python counting game project
+![Python](https://img.shields.io/badge/Python-3.x-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Platform](https://img.shields.io/badge/Platform-Cross--Platform-orange)
 
+A beginner-friendly Python number guessing game with multiple difficulty levels, hints, timer, leaderboard, and cheat system. Developed with AI assistance.
 
+---
 
+## Features
 
-This is my first Python game and also my first GitHub project. Development was assisted by AI, and appropriate credit is given.
+- **Multiple Difficulty Levels**  
+  - Easy: 1–50, 12 attempts, 2 minutes  
+  - Medium: 1–500, 8 attempts, 3 minutes  
+  - Hard: 1–1000, 6 attempts, 5 minutes  
 
-Requirements
+- **Hints System**  
+  - Even/Odd, divisible by 3/5, prime  
+  - Quarter ranges (first/second/third/fourth)  
+  - Multiple of 10 or near multiples  
+  - Close to midpoint of range  
 
-Visual Studio Code (recommended)
+- **Timer** with automatic game over  
+- **Leaderboard (Top 5)** stored locally in `leaderboard.json`  
+- **Cheat System**: press `p` key or enter `'p'` to win instantly  
+- **GUI** using Tkinter with Play Again / Exit buttons  
+- **Debug Mode** (`DEBUG = "True"`) shows internal states  
+- **Auto-Test Mode** for automated gameplay testing  
+- **Cross-platform**: Windows, macOS, Linux (optional sound on Windows)
 
-Python 3.x (the game currently runs in the terminal)
+---
 
+## Update Log
 
-Planned Features
+### v1.0 (alpha) 
+- Basic number guessing game, hot/cold feedback, simple hints  
 
-[ ] Add a graphical user interface (GUI)
+### v1.1(demo) 
+- Added multiple difficulties, custom range, local high score, cheat `'P'`  
 
-[ ] Add a calculator game mode
+### v2.0 (demo) 
+- Full GUI, detailed hints, top 5 leaderboard, debug mode, auto-test, cross-platform  
 
-[ ] Include full project credits in the source code
+### v2.1 (Current): game release (i think) 
+- Adjusted medium/hard ranges, more hints, optimized timer, cheat integrated, leaderboard tested  
 
-[ ] Release version 1.0
+---
 
-[ ] Move on to new Python projects after version 10.0
+## How to Play
 
+1. Run `Complex guessing_game.py` in Python 3.x  
+2. Choose a difficulty or custom range  
+3. Enter guesses in the input box  
+4. Use hints to narrow the number  
+5. Press `p` to activate cheat and win  
+6. Try to guess in the fewest attempts to appear on the leaderboard  
 
-Notes
+---
 
-Future updates will expand functionality and improve the overall experience.
+## Requirements
 
-After version 10.0 is released, development on this game will stop.
+- Python 3.x  
+- Tkinter (usually included with Python)  
+- colorama (`pip install colorama`)  
+- Visual Studio Code (recommended)
+
+---
+
+## Notes
+
+- Fully offline, no internet needed  
+- Future updates may enhance hints, GUI, and leaderboard
