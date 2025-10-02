@@ -84,7 +84,7 @@ Auto-Test feature for developers
 
 ## How to Play
 
-1. Run `Complex guessing_game.py` in Python 3.x  
+1. Run `Complex Counting_game.py` in Python 3.x  
 2. Choose a difficulty or custom range  
 3. Enter guesses in the input box  
 4. Use hints to narrow the number  
