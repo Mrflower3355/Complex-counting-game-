@@ -128,6 +128,10 @@ class GuessingGame:
                     self.cheat_win()
         except Exception: pass
 
+    def clear(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
     def create_menu(self):
         self.clear()
         tk.Label(self.root, text="Select Difficulty", font=("Arial", 14)).pack(pady=10)
@@ -201,4 +205,55 @@ class GuessingGame:
             if name and not getattr(self, "_cheat_ended", False): update_leaderboard(name, self.attempts)
             self.end_game(True, f"Correct! Guessed in {self.attempts} attempts."); return
 
-        if
+        # لو الرقم غلط
+        if guess < self.number:
+            self.info.config(text="Too low! Try again.")
+        else:
+            self.info.config(text="Too high! Try again.")
+
+        # هينت كل محاولتين
+        hints = self.give_hint()
+        if hints:
+            self.info.config(text=self.info.cget("text") + "\nHint: " + ", ".join(hints))
+
+        # لو خلصت المحاولات
+        if self.attempts >= self.max_attempts:
+            self.end_game(False, f"Out of attempts! Number was {self.number}")
+
+    def end_game(self, win, msg):
+        if win:
+            if WINSOUND_AVAILABLE: 
+                try: winsound.MessageBeep()
+                except: pass
+            messagebox.showinfo("Victory", msg)
+        else:
+            messagebox.showerror("Game Over", msg)
+        self.create_menu()
+
+    def cheat_win(self):
+        self._cheat_ended = True
+        messagebox.showinfo("Cheat Activated", f"Cheat used! The number was {self.number}.")
+        self.create_menu()
+
+    def run_auto_test(self):
+        if self.auto_test_running: return
+        self.auto_test_running = True
+
+        def auto_play():
+            self.start(1)
+            while self.attempts < self.max_attempts:
+                guess = self.number  # يخمن الرقم الصحيح على طول
+                self.entry.delete(0, tk.END)
+                self.entry.insert(0, str(guess))
+                self.check_guess()
+                time.sleep(0.2)
+            self.auto_test_running = False
+
+        threading.Thread(target=auto_play, daemon=True).start()
+
+
+# تشغيل اللعبة
+if __name__ == "__main__":
+    root = tk.Tk()
+    game = GuessingGame(root)
+    root.mainloop()
