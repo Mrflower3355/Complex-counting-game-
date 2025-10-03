@@ -33,19 +33,19 @@ A beginner-friendly Python number guessing game with multiple difficulty levels,
 
 ## Update Log
 
-### v1.0 (alpha) 
+### v1.0 (pre beta) 
 - Basic number guessing game, hot/cold feedback, simple hints  
 
-### v1.1(demo) 
+### v1.1(beta) 
 - Added multiple difficulties, custom range, local high score, cheat `'P'`  
 
-### v2.0 (demo) 
+### v2.0 (pre alpha) 
 - Full GUI, detailed hints, top 5 leaderboard, debug mode, auto-test, cross-platform  
 
-### v2.1 (pre demo): game release (i think) 
+### v2.1 (alpha): 
 - Adjusted medium/hard ranges, more hints, optimized timer, cheat integrated, leaderboard tested  
 
-Features (v2.2.1)(current demo) 
+### Features (v2.2.1)(current patch pre demo) 
 
 Multiple difficulty levels:
 
