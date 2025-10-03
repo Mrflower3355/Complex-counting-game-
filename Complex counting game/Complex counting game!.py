@@ -1,54 +1,66 @@
-# Complex Number Guessing Game - Patch 2.2.1 (Improved + Auto-Simulation)
-# - Thread-safe (no UI calls from background threads)
-# - Timer cancel, safe parsing, safer leaderboard file location
-# - Cheat via Ctrl+P and via entry 'p' (doesn't update leaderboard)
-# - Auto-Test (main-thread) and Auto-Simulation (multiple rounds)
-# - DEBUG via logging
+# Complex Number Guessing Game - Patch 3.0.0 (Conceptual Overhaul)
+#
+# - Core Gameplay: The game is now a true Complex Number Guessing Game.
+# - UI Overhaul: Input is now handled with separate "Real" and "Imaginary" fields.
+# - Hint System: Main hint is now based on complex number magnitude (|z|).
+# - Architectural Refactor: Difficulty settings are now data-driven (dict).
+# - Smarter Automation: Replaced brute-force test with a "Smart Solver" that
+#   intelligently narrows down the search space.
+# - Code Clarity: Removed magic numbers by defining constants for UI delays.
 
-import tkinter as tk
-from tkinter import messagebox, simpledialog
-import random
-import time
-import os
 import json
 import logging
+import math
+import os
+import random
+import time
+import tkinter as tk
+from tkinter import messagebox, simpledialog
 
 # Optional winsound (Windows only)
 try:
     import winsound
     WINSOUND_AVAILABLE = True
-except Exception:
+except ImportError:
     WINSOUND_AVAILABLE = False
 
-# Logging setup
+# --- Constants and Configuration ---
 DEBUG = True
 logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO, format='[%(levelname)s] %(message)s')
 log = logging.getLogger(__name__)
 
-# App storage (leaderboard)
+# App Storage
 APP_DIR = os.path.join(os.path.expanduser("~"), ".complex_guess_game")
 os.makedirs(APP_DIR, exist_ok=True)
 LEADERBOARD_FILE = os.path.join(APP_DIR, "leaderboard.json")
 MAX_LEADERBOARD = 5
 
+# UI Timings
+INPUT_DISABLE_MS = 200
+AUTO_STEP_DELAY_MS = 250
+
+# Difficulty Configuration
+DIFFICULTY_SETTINGS = {
+    1: {"range": 10, "attempts": 15, "timer": 120},  # Easy: -10 to +10
+    2: {"range": 50, "attempts": 10, "timer": 180},  # Medium: -50 to +50
+    3: {"range": 100, "attempts": 8, "timer": 300}, # Hard: -100 to +100
+}
+
+
+# --- Helper Functions ---
 def safe_load_leaderboard():
+    """Safely loads the leaderboard from a JSON file."""
     if not os.path.exists(LEADERBOARD_FILE):
-        log.debug("Leaderboard file not found, starting fresh.")
         return []
     try:
         with open(LEADERBOARD_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
         if not isinstance(data, list):
-            log.debug("Leaderboard file invalid, resetting.")
             return []
-        clean = []
-        for e in data:
-            if isinstance(e, dict) and 'name' in e and 'score' in e:
-                try:
-                    score = int(e['score'])
-                    clean.append({'name': str(e['name']), 'score': score})
-                except Exception:
-                    continue
+        clean = [
+            e for e in data
+            if isinstance(e, dict) and 'name' in e and isinstance(e.get('score'), int)
+        ]
         log.debug(f"Loaded leaderboard: {clean}")
         return clean
     except Exception:
@@ -56,24 +68,25 @@ def safe_load_leaderboard():
         return []
 
 def safe_save_leaderboard(board):
+    """Safely saves the leaderboard to a JSON file."""
     try:
         tmp = LEADERBOARD_FILE + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(board, f, indent=2, ensure_ascii=False)
         os.replace(tmp, LEADERBOARD_FILE)
-        log.debug(f"Saved leaderboard: {board}")
     except Exception:
         log.exception("Failed to save leaderboard.")
 
 def update_leaderboard(name, score):
+    """Adds a new score to the leaderboard."""
     board = safe_load_leaderboard()
     board.append({"name": str(name), "score": int(score)})
     board = sorted(board, key=lambda x: x["score"])[:MAX_LEADERBOARD]
     safe_save_leaderboard(board)
     log.debug(f"Updated leaderboard with {name} - {score} attempts")
-    return board
 
 def leaderboard_str():
+    """Formats the leaderboard into a displayable string."""
     board = safe_load_leaderboard()
     if not board:
         return "No scores yet."
@@ -83,34 +96,35 @@ def leaderboard_str():
     return text
 
 def is_prime(n):
-    if n < 2: return False
+    """Checks if a non-negative integer is prime."""
+    n = abs(n)
+    if n < 2:
+        return False
     for i in range(2, int(n**0.5) + 1):
-        if n % i == 0: return False
+        if n % i == 0:
+            return False
     return True
 
+# --- Main Game Class ---
+
 class GuessingGame:
+    """Manages the UI and state for the Complex Number Guessing Game."""
     def __init__(self, root):
         self.root = root
         self.root.title("Complex Number Guessing Game")
-        self.auto_test_running = False
+
+        # State flags
+        self.solver_running = False
         self.timer_after_id = None
         self.auto_after_id = None
-        self.timer_running = False
         self._cheat_ended = False
         self._auto_mode = False
 
-        # Auto-simulation state
-        self.sim_running = False
-        self.sim_results = []
-        self.sim_config = None  # tuple(difficulties, rounds_each)
-        self.sim_state = None   # internal iterator/state
-
-        # bind safer cheat: Ctrl+P
         self.root.bind_all("<Control-p>", self._on_ctrl_p)
         self.create_menu()
 
     def _on_ctrl_p(self, event=None):
-        if getattr(self, "number", None) is not None:
+        if hasattr(self, "target_number"):
             log.info("Ctrl+P detected -> activating cheat.")
             self.cheat_win()
 
@@ -120,383 +134,233 @@ class GuessingGame:
 
     def create_menu(self):
         self.clear()
-        tk.Label(self.root, text="Select Difficulty", font=("Arial", 14)).pack(pady=10)
-        tk.Button(self.root, text="Easy (1-50)", width=20, command=lambda: self.start(1)).pack(pady=5)
-        tk.Button(self.root, text="Medium (1-500)", width=20, command=lambda: self.start(2)).pack(pady=5)
-        tk.Button(self.root, text="Hard (1-1000)", width=20, command=lambda: self.start(3)).pack(pady=5)
-        tk.Button(self.root, text="Auto-Test", width=20, command=self.run_auto_test).pack(pady=5)
-        tk.Button(self.root, text="Auto-Simulation", width=20, command=self.start_auto_simulation_dialog).pack(pady=5)
+        tk.Label(self.root, text="Select Difficulty", font=("Arial", 16, "bold")).pack(pady=10)
+        tk.Button(self.root, text="Easy (±10)", width=25, command=lambda: self.start(1)).pack(pady=5)
+        tk.Button(self.root, text="Medium (±50)", width=25, command=lambda: self.start(2)).pack(pady=5)
+        tk.Button(self.root, text="Hard (±100)", width=25, command=lambda: self.start(3)).pack(pady=5)
+        tk.Button(self.root, text="Run Smart Solver (Easy)", width=25, command=self.run_smart_solver).pack(pady=20)
         tk.Label(self.root, text=leaderboard_str(), font=("Arial", 12), justify="left").pack(pady=10)
 
-    def start(self, difficulty):
-        # reset scheduled tasks and flags
-        self._cheat_ended = False
-        self._auto_mode = False
+    def stop_all_auto_tasks(self):
+        """Cancels all scheduled and running automated tasks."""
         self.cancel_timer()
-        self.cancel_auto_schedule()
+        if self.auto_after_id:
+            try:
+                self.root.after_cancel(self.auto_after_id)
+            except Exception:
+                pass
+            self.auto_after_id = None
+        self.solver_running = False
+        self._auto_mode = False
+        log.debug("Stopped all auto tasks and cleared flags")
 
-        if difficulty == 1:
-            self.min_num, self.max_num, self.max_attempts, self.timer = 1, 50, 12, 120
-        elif difficulty == 2:
-            self.min_num, self.max_num, self.max_attempts, self.timer = 1, 500, 8, 180
-        else:
-            self.min_num, self.max_num, self.max_attempts, self.timer = 1, 1000, 6, 300
+    def start(self, difficulty, stop_auto=True):
+        self._cheat_ended = False
+        if stop_auto:
+            self.stop_all_auto_tasks()
 
-        if self.min_num >= self.max_num:
-            self.max_num = self.min_num + 50
+        config = DIFFICULTY_SETTINGS[difficulty]
+        self.max_range = config["range"]
+        self.max_attempts = config["attempts"]
+        self.timer = config["timer"]
 
-        self.number = random.randint(self.min_num, self.max_num)
-        log.debug(f"Number to guess: {self.number}")
+        # Generate the secret complex number
+        real_part = random.randint(-self.max_range, self.max_range)
+        imag_part = random.randint(-self.max_range, self.max_range)
+        self.target_number = complex(real_part, imag_part)
+        self.target_magnitude = abs(self.target_number)
+        log.debug(f"Target number to guess: {self.target_number}")
+
         self.attempts = 0
-        self.guesses = []
         self.start_time = time.time()
 
+        self.setup_game_ui()
+        self.update_timer()
+
+    def setup_game_ui(self):
+        """Creates the widgets for the main game screen."""
         self.clear()
-        self.status = tk.Label(self.root, text=f"Guess a number between {self.min_num} and {self.max_num}", font=("Arial", 12))
-        self.status.pack(pady=10)
-        self.entry = tk.Entry(self.root, font=("Arial", 12))
-        self.entry.pack(pady=5)
-        self.entry.bind("<Return>", lambda e: self.check_guess())
-        self.entry.focus_set()
-        self.submit_btn = tk.Button(self.root, text="Submit", command=self.check_guess)
-        self.submit_btn.pack(pady=5)
-        self.info = tk.Label(self.root, text="", font=("Arial", 11))
-        self.info.pack(pady=10)
+        range_str = f"Guess a complex number (a + bi) where 'a' and 'b' are between {-self.max_range} and {self.max_range}"
+        tk.Label(self.root, text=range_str, font=("Arial", 12), wraplength=380).pack(pady=10)
+
+        input_frame = tk.Frame(self.root)
+        input_frame.pack(pady=5)
+        tk.Label(input_frame, text="Real (a):", font=("Arial", 12)).pack(side="left", padx=5)
+        self.entry_real = tk.Entry(input_frame, font=("Arial", 12), width=8)
+        self.entry_real.pack(side="left")
+        tk.Label(input_frame, text="Imaginary (b):", font=("Arial", 12)).pack(side="left", padx=5)
+        self.entry_imag = tk.Entry(input_frame, font=("Arial", 12), width=8)
+        self.entry_imag.pack(side="left")
+
+        self.entry_real.bind("<Return>", lambda e: self.check_guess())
+        self.entry_imag.bind("<Return>", lambda e: self.check_guess())
+        self.entry_real.focus_set()
+
+        self.submit_btn = tk.Button(self.root, text="Submit Guess", command=self.check_guess)
+        self.submit_btn.pack(pady=10)
+
+        self.info_label = tk.Label(self.root, text="", font=("Arial", 11), justify="center")
+        self.info_label.pack(pady=10)
         self.timer_label = tk.Label(self.root, text="", font=("Arial", 12), fg="blue")
         self.timer_label.pack(pady=10)
 
-        self.timer_running = True
-        self.update_timer()
-
     def update_timer(self):
-        if not getattr(self, "timer_running", False):
-            return
+        if not hasattr(self, 'start_time'): return
         elapsed = int(time.time() - self.start_time)
         remaining = self.timer - elapsed
-        log.debug(f"Timer update - remaining: {remaining}s")
-        if getattr(self, "timer_label", None) and self.timer_label.winfo_exists():
-            try:
-                self.timer_label.config(text=f"⏳ Time left: {remaining//60}:{remaining%60:02d}")
-            except Exception:
-                log.exception("Failed updating timer_label")
-        if remaining <= 0:
-            self.timer_running = False
-            self.end_game(False, "Time's up! The number was {}".format(getattr(self, "number", "N/A")))
-            return
-        try:
-            self.timer_after_id = self.root.after(1000, self.update_timer)
-        except Exception:
-            log.exception("Failed to schedule timer update")
+        if self.timer_label.winfo_exists():
+            self.timer_label.config(text=f"⏳ Time left: {max(0, remaining)//60}:{max(0, remaining)%60:02d}")
 
-    def give_hint(self):
-        hints = []
-        try:
-            hints.append("even" if self.number % 2 == 0 else "odd")
-            if self.attempts > 0 and self.attempts % 2 == 0:
-                if self.number % 3 == 0: hints.append("divisible by 3")
-                if self.number % 5 == 0: hints.append("divisible by 5")
-                if is_prime(self.number): hints.append("prime number")
-        except Exception:
-            log.exception("give_hint error")
-        log.debug(f"Hints: {hints}")
-        return hints
+        if remaining <= 0:
+            self.end_game(False, f"Time's up! The number was {self.target_number}")
+            return
+        self.timer_after_id = self.root.after(1000, self.update_timer)
 
     def check_guess(self):
-        if not getattr(self, "entry", None) or not self.entry.winfo_exists():
-            return
-        guess_str = self.entry.get()
-        if guess_str.strip().lower() == 'p':
-            self.cheat_win()
-            return
-
         try:
-            guess = int(guess_str.strip())
+            real = int(self.entry_real.get().strip())
+            imag = int(self.entry_imag.get().strip())
         except ValueError:
-            messagebox.showerror("Error", "Enter a valid integer.")
+            messagebox.showerror("Invalid Input", "Please enter valid integers for both real and imaginary parts.")
             return
 
-        if guess < self.min_num or guess > self.max_num:
-            messagebox.showwarning("Out of range", f"Enter between {self.min_num}-{self.max_num}.")
-            return
-
-        self.guesses.append(guess)
         self.attempts += 1
+        guess = complex(real, imag)
         log.debug(f"Attempt {self.attempts}: {guess}")
-
-        # disable inputs briefly
         self.disable_inputs_temporarily()
 
-        if guess == self.number:
-            if DEBUG:
-                name = "AutoTester"
-            else:
-                try:
-                    name = simpledialog.askstring("Name", "Enter your name for leaderboard:")
-                except Exception:
-                    name = None
-            if name and not getattr(self, "_cheat_ended", False) and not getattr(self, "_auto_mode", False):
-                update_leaderboard(name, self.attempts)
-            self.end_game(True, f"Correct! Guessed in {self.attempts} attempts.")
+        if guess == self.target_number:
+            name_to_save = None
+            if not DEBUG and not self._auto_mode and not self._cheat_ended:
+                name_to_save = simpledialog.askstring("You Won!", "Enter your name for the leaderboard:")
+            if name_to_save:
+                update_leaderboard(name_to_save, self.attempts)
+            self.end_game(True, f"Correct! You guessed {self.target_number} in {self.attempts} attempts.")
             return
 
-        # wrong guess handling
-        if guess < self.number:
-            self.info.config(text="Too low! Try again.")
+        # Provide hints
+        guess_magnitude = abs(guess)
+        if guess_magnitude < self.target_magnitude:
+            magnitude_hint = "Magnitude is TOO LOW."
         else:
-            self.info.config(text="Too high! Try again.")
-
-        hints = self.give_hint()
-        if hints:
-            try:
-                self.info.config(text=self.info.cget("text") + "\nHint: " + ", ".join(hints))
-            except Exception:
-                log.exception("Failed to append hints to info label")
+            magnitude_hint = "Magnitude is TOO HIGH."
+        
+        hints = self.give_component_hints()
+        full_hint = magnitude_hint + "\n" + hints
+        self.info_label.config(text=full_hint)
 
         if self.attempts >= self.max_attempts:
-            self.end_game(False, f"Out of attempts! Number was {self.number}")
+            self.end_game(False, f"Out of attempts! The number was {self.target_number}")
+
+    def give_component_hints(self):
+        """Gives hints about the individual real and imaginary parts."""
+        if self.attempts % 2 != 0: return "" # Give hints every 2 attempts
+        
+        tr, ti = self.target_number.real, self.target_number.imag
+        hints = []
+        if tr % 2 == 0: hints.append("Real part is even")
+        else: hints.append("Real part is odd")
+        
+        if is_prime(int(ti)): hints.append("Imaginary part is prime")
+        
+        return "Hint: " + ", ".join(hints)
 
     def end_game(self, win, msg):
-        # cancel scheduled tasks to avoid lingering callbacks
         self.cancel_timer()
-        self.cancel_auto_schedule()
-        try:
-            if win:
-                if WINSOUND_AVAILABLE:
-                    try:
-                        winsound.MessageBeep()
-                    except Exception:
-                        pass
-                messagebox.showinfo("Victory", msg)
-            else:
-                messagebox.showerror("Game Over", msg)
-        except Exception:
-            log.exception("Failed showing end dialog")
-        self._cheat_ended = False
-        self._auto_mode = False
-        self.auto_test_running = False
-        # rebuild menu
-        self.create_menu()
+        if win:
+            if WINSOUND_AVAILABLE: winsound.MessageBeep(winsound.MB_ICONINFORMATION)
+            messagebox.showinfo("Victory!", msg)
+        else:
+            messagebox.showerror("Game Over", msg)
+        
+        if self.solver_running:
+            self.solver_running = False # Stop the solver loop
+        else:
+            self.create_menu() # Rebuild menu for human player
 
     def cheat_win(self):
         self._cheat_ended = True
+        messagebox.showinfo("Cheat Activated", f"The number was {self.target_number}.")
+        self.end_game(False, f"Cheat used. The number was {self.target_number}")
+
+    def disable_inputs_temporarily(self):
         try:
-            messagebox.showinfo("Cheat Activated", f"Cheat used! The number was {getattr(self, 'number', 'N/A')}.")
+            self.submit_btn.config(state="disabled")
+            self.root.after(INPUT_DISABLE_MS, lambda: self.submit_btn.config(state="normal"))
         except Exception:
-            log.exception("Failed showing cheat message")
-        # do not update leaderboard
-        self.end_game(False, f"Cheat used. The number was {getattr(self, 'number', 'N/A')}")
-
-    def disable_inputs_temporarily(self, millis=300):
-        try:
-            if getattr(self, "submit_btn", None) and self.submit_btn.winfo_exists():
-                self.submit_btn.config(state="disabled")
-                self.root.after(millis, lambda: self.submit_btn.config(state="normal"))
-        except Exception:
-            log.exception("Failed to toggle inputs")
-
-    # ---------- Auto-Test (single run, main-thread) ----------
-    def run_auto_test(self):
-        if self.auto_test_running:
-            log.info("Auto-test already running; ignoring request.")
-            return
-        self.auto_test_running = True
-        self._auto_mode = True
-        self.start(1)  # start easy mode
-        # prepare brute-force sequential iterator
-        self._auto_next = iter(range(self.min_num, self.max_num + 1))
-
-        def _auto_step():
-            if not self.auto_test_running:
-                return
-            try:
-                guess = next(self._auto_next)
-            except StopIteration:
-                # shouldn't normally happen because number in range
-                self.auto_test_running = False
-                return
-            if not getattr(self, "entry", None) or not self.entry.winfo_exists():
-                self.auto_test_running = False
-                return
-            try:
-                self.entry.delete(0, tk.END)
-                self.entry.insert(0, str(guess))
-                self.check_guess()
-            except Exception:
-                log.exception("Auto-test step failure")
-                self.auto_test_running = False
-                return
-            # schedule next step if still running
-            if self.auto_test_running and getattr(self, "number", None) is not None:
-                try:
-                    self.auto_after_id = self.root.after(150, _auto_step)
-                except Exception:
-                    log.exception("Failed to schedule auto step")
-                    self.auto_test_running = False
-
-        try:
-            self.auto_after_id = self.root.after(150, _auto_step)
-        except Exception:
-            log.exception("Failed to start auto-test")
-            self.auto_test_running = False
+            pass
 
     def cancel_timer(self):
-        self.timer_running = False
-        if getattr(self, "timer_after_id", None):
-            try:
-                self.root.after_cancel(self.timer_after_id)
-            except Exception:
-                pass
+        if self.timer_after_id:
+            self.root.after_cancel(self.timer_after_id)
             self.timer_after_id = None
+        if hasattr(self, 'start_time'):
+            del self.start_time
 
-    def cancel_auto_schedule(self):
-        self.auto_test_running = False
-        if getattr(self, "auto_after_id", None):
-            try:
-                self.root.after_cancel(self.auto_after_id)
-            except Exception:
-                pass
-            self.auto_after_id = None
-
-    # ---------- Auto-Simulation (multiple rounds, safe via after) ----------
-    def start_auto_simulation_dialog(self):
-        if self.sim_running:
-            messagebox.showinfo("Simulation", "Simulation already running.")
-            return
-        # ask config: difficulties and rounds each (simple)
-        try:
-            rounds = simpledialog.askinteger("Auto-Simulation", "How many rounds per difficulty? (e.g. 3)", minvalue=1, maxvalue=20)
-            if rounds is None:
-                return
-        except Exception:
-            rounds = 3
-        # default difficulties: [1,2,3]
-        self.start_auto_simulation(difficulties=[1,2,3], rounds_each=rounds)
-
-    def start_auto_simulation(self, difficulties=[1,2,3], rounds_each=3):
-        """Start auto-simulation: runs rounds_each rounds for each difficulty in difficulties.
-        Results collected into self.sim_results as tuples (difficulty, round_index, attempts or 'fail').
-        Implemented with `after` to stay on main thread (safe)."""
-        if self.sim_running:
-            log.info("Simulation already running.")
-            return
-        self.sim_running = True
-        self.sim_results = []
-        self.sim_config = (list(difficulties), rounds_each)
-        # state indices
-        self.sim_state = {
-            "diff_idx": 0,
-            "round_idx": 0,
-            "current_attempts": 0,
-            "current_guess_iter": None
-        }
-        log.info(f"Starting Auto-Simulation: difficulties={difficulties}, rounds_each={rounds_each}")
-        # start first round via after to ensure UI stable
-        self.root.after(200, self._sim_step_start_round)
-
-    def _sim_step_start_round(self):
-        if not self.sim_running or not self.sim_config:
-            return
-        difficulties, rounds_each = self.sim_config
-        s = self.sim_state
-        if s["diff_idx"] >= len(difficulties):
-            # finished all difficulties
-            self.sim_running = False
-            log.info(f"Auto-Simulation finished. Results: {self.sim_results}")
-            try:
-                messagebox.showinfo("Auto-Simulation", f"Simulation finished.\nResults:\n{self.sim_results}")
-            except Exception:
-                pass
-            return
-        difficulty = difficulties[s["diff_idx"]]
-        if s["round_idx"] >= rounds_each:
-            # advance difficulty
-            s["diff_idx"] += 1
-            s["round_idx"] = 0
-            self.root.after(100, self._sim_step_start_round)
+    # ---------- Smart Solver (Replaces Auto-Test) ----------
+    def run_smart_solver(self):
+        if self.solver_running:
+            messagebox.showwarning("Busy", "The Smart Solver is already running.")
             return
 
-        # start a new game for this difficulty
-        self._cheat_ended = False
         self._auto_mode = True
-        self.start(difficulty)
-        self.sim_state["current_attempts"] = 0
-        self.sim_state["current_guess_iter"] = iter(range(self.min_num, self.max_num + 1))
-        log.debug(f"Sim: starting difficulty {difficulty}, round {s['round_idx']+1}")
-        # schedule first guess
-        self.root.after(150, self._sim_step_make_guess)
+        self.start(1, stop_auto=False) # Run on easy mode
+        self.solver_running = True
 
-    def _sim_step_make_guess(self):
-        if not self.sim_running or not self.sim_config:
-            return
-        s = self.sim_state
-        # if entry gone stop
-        if not getattr(self, "entry", None) or not self.entry.winfo_exists():
-            self.sim_running = False
-            return
-        try:
-            guess = next(s["current_guess_iter"])
-        except StopIteration:
-            # shouldn't happen
-            guess = None
+        # Solver state
+        self.solver_state = {"last_mag_diff": float('inf'), "current_radius": self.max_range}
+        
+        self.root.after(AUTO_STEP_DELAY_MS, self._solver_step)
 
-        if guess is None:
-            # fail to find
-            self.sim_results.append((s["diff_idx"], s["round_idx"], "fail"))
-            s["round_idx"] += 1
-            self.root.after(100, self._sim_step_start_round)
+    def _solver_step(self):
+        if not self.solver_running:
+            log.info("Solver stopped.")
+            self.create_menu() # Show menu after solver is done
+            return
+            
+        # Check if game ended
+        if not hasattr(self, 'entry_real') or not self.entry_real.winfo_exists():
+            log.info("Solver detected game end.")
+            self.solver_running = False
+            self.create_menu()
             return
 
-        # perform guess
-        try:
-            self.entry.delete(0, tk.END)
-            self.entry.insert(0, str(guess))
-            # increment attempt counter BEFORE check (check_guess also increments attempts)
-            # but to keep consistent with normal flow, let check_guess increment
-            self.check_guess()
-        except Exception:
-            log.exception("Auto-sim guess error")
-            self.sim_running = False
-            return
+        # Guided random walk strategy
+        radius = self.solver_state["current_radius"]
+        guess_real = random.randint(-int(radius), int(radius))
+        guess_imag = random.randint(-int(radius), int(radius))
 
-        # if game ended due to correct guess or attempts exhausted, detect via create_menu presence
-        # We rely on end_game calling create_menu -> entry will be missing then
-        if not getattr(self, "entry", None) or not self.entry.winfo_exists():
-            # game finished this round; record attempts (from self.attempts) or fail
-            attempts = getattr(self, "attempts", None)
-            if attempts is None:
-                self.sim_results.append((s["diff_idx"], s["round_idx"], "fail"))
-            else:
-                self.sim_results.append((s["diff_idx"], s["round_idx"], attempts))
-            # advance round index and start next
-            s["round_idx"] += 1
-            # small pause before next round
-            self.root.after(200, self._sim_step_start_round)
-            return
+        # Make the guess
+        self.entry_real.delete(0, tk.END)
+        self.entry_real.insert(0, str(guess_real))
+        self.entry_imag.delete(0, tk.END)
+        self.entry_imag.insert(0, str(guess_imag))
+        self.check_guess()
 
-        # otherwise schedule next guess
-        self.root.after(120, self._sim_step_make_guess)
+        # Update strategy based on magnitude hint
+        guess_mag = abs(complex(guess_real, guess_imag))
+        mag_diff = abs(guess_mag - self.target_magnitude)
 
-    # ---------- cleanup helpers ----------
-    def cancel_timer(self):
-        self.timer_running = False
-        if getattr(self, "timer_after_id", None):
-            try:
-                self.root.after_cancel(self.timer_after_id)
-            except Exception:
-                pass
-            self.timer_after_id = None
+        # If we overshot the magnitude, shrink the search radius
+        if guess_mag > self.target_magnitude:
+            self.solver_state["current_radius"] = (guess_mag + self.target_magnitude) / 2.1
+        
+        # If we are getting closer, slightly shrink radius, otherwise expand
+        if mag_diff < self.solver_state["last_mag_diff"]:
+            self.solver_state["current_radius"] *= 0.98 
+        else:
+            self.solver_state["current_radius"] *= 1.1
+        self.solver_state["current_radius"] = max(1, self.solver_state["current_radius"])
 
-    def cancel_auto_schedule(self):
-        self.auto_test_running = False
-        if getattr(self, "auto_after_id", None):
-            try:
-                self.root.after_cancel(self.auto_after_id)
-            except Exception:
-                pass
-            self.auto_after_id = None
+        self.solver_state["last_mag_diff"] = mag_diff
 
-# Run
+        if self.solver_running: # Schedule next step if game not won/lost
+             self.auto_after_id = self.root.after(AUTO_STEP_DELAY_MS, self._solver_step)
+
+# --- Run Application ---
 if __name__ == "__main__":
     root = tk.Tk()
+    root.geometry("400x500")
     game = GuessingGame(root)
     root.mainloop()
+
