@@ -3,9 +3,6 @@
 ![Python](https://img.shields.io/badge/Python-3.x-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Platform](https://img.shields.io/badge/Platform-Cross--Platform-orange)
-
-A beginner-friendly Python number guessing game with multiple difficulty levels, hints, timer, leaderboard, and cheat system. Developed with AI assistance.
-
 ---
 
 ## Features
@@ -31,6 +28,7 @@ A beginner-friendly Python number guessing game with multiple difficulty levels,
 
 ---
 ### Changelogs are in the code
+### finally a stable version 3.0.1
 
 ## How to Play
 
