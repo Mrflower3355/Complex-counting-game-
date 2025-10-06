@@ -45,7 +45,6 @@
 
 - Python 3.x  
 - Tkinter (usually included with Python)  
-- colorama (`pip install colorama`)  
 - Visual Studio Code (recommended)
 
 ---
