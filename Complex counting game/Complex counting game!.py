@@ -1,12 +1,12 @@
 """
-Complex Number Guessing Game - v3.1
+Complex Number Guessing Game - v3.1.2
 Adds: Themes (light/dark), sounds, points, achievements,
 expanded leaderboard (stores points/time/attempts), game history,
 Daily Challenge (date-seeded), Survival Mode (multi-stage),
 Improved deterministic solver with visual log, UI improvements,
 and defensive UI destruction checks.
 
-Save this file and run with: python complex_guess_game_v3_1_all_features.py
+Save this file and run with: python complex_guess_game_v3_1.2_all_features.py
 """
 
 import json
