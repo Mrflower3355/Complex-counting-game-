@@ -9,9 +9,9 @@
 ## Features
 
 - **Multiple Difficulty Levels**  
-  - Easy: 1–50, 12 attempts, 2 minutes  
-  - Medium: 1–500, 8 attempts, 3 minutes  
-  - Hard: 1–1000, 6 attempts, 5 minutes  
+  - Easy: -10–10, 12 attempts, 2 minutes  
+  - Medium: -50–50, 8 attempts, 3 minutes  
+  - Hard: -100–100, 6 attempts, 5 minutes  
 
 - **Hints System**  
   - Even/Odd, divisible by 3/5, prime  
