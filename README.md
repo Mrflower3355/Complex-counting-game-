@@ -28,7 +28,6 @@
 
 ---
 ### Changelogs are in the code
-### finally a stable version 3.0.1
 
 ## How to Play
 
