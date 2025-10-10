@@ -1,9 +1,6 @@
-### Version 4 will be the last version for this project i had fun while working on that project so V4 will be here soon (i am thinking about making it EXE by version v4 by using pyinstaller)
-# Complex Number Guessing Game
+### Version 3 the last version for this project i had fun while working on my first project cya all on my next projects
 
 ![Python](https://img.shields.io/badge/Python-3.x-blue)
-![License](https://img.shields.io/badge/License-MIT-green)
-![Platform](https://img.shields.io/badge/Platform-Cross--Platform-orange)
 ---
 
 ## Features
